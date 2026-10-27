@@ -68,6 +68,8 @@
     .login { max-width: 400px; margin: 12vh auto 0; }
     .error { color: var(--red); margin: 0 0 16px; }
     .header { display: flex; justify-content: space-between; align-items: center; }
+    .actions { display: flex; gap: 12px; margin: 0 0 24px; }
+    .actions button { flex: 1; }
     .center { text-align: center; }
     .hidden { display: none; }
   </style>
@@ -80,6 +82,7 @@
 
     const app = document.getElementById('app');
     const getToken = () => localStorage.getItem('token');
+    let flash = '';
 
     const formatCurrency = (value) =>
       Number(value ?? 0).toLocaleString(undefined, {
@@ -176,6 +179,25 @@
           </div>
         </div>
 
+        ${flash ? `<p class="profit" style="margin:0 0 16px">${escapeHtml(flash)}</p>` : ''}
+        <div class="actions">
+          <button id="depositBtn">Deposit</button>
+          <button class="secondary" id="withdrawBtn">Withdraw</button>
+        </div>
+
+        ${(data.requests || []).length === 0 ? '' : `
+          <h3 style="margin-bottom:12px">Your Requests</h3>
+          <div class="card" style="margin-bottom:24px">
+            ${data.requests.map((r) => `
+              <div class="asset">
+                <div>
+                  <strong style="text-transform:capitalize">${escapeHtml(r.type)}</strong>
+                  <div class="label" style="margin:0">${new Date(r.date).toLocaleDateString()} · ${escapeHtml(r.status)}</div>
+                </div>
+                <strong>$${formatCurrency(r.amount)}</strong>
+              </div>`).join('')}
+          </div>`}
+
         <h3 style="margin-bottom:12px">Transaction History</h3>
         <div class="card" style="margin-bottom:24px">
           ${
@@ -211,11 +233,54 @@
         localStorage.removeItem('token');
         renderLogin();
       });
+      flash = '';
+      document.getElementById('depositBtn').addEventListener('click', () => renderRequestForm('deposit', data));
+      document.getElementById('withdrawBtn').addEventListener('click', () => renderRequestForm('withdrawal', data));
       app.querySelectorAll('[data-asset]').forEach((btn) =>
         btn.addEventListener('click', () =>
           alert(`Order placed for ${btn.dataset.asset}`)
         )
       );
+    }
+
+    function renderRequestForm(type, data, message = '') {
+      const isDeposit = type === 'deposit';
+      app.innerHTML = `
+        <div class="card login">
+          <h2>${isDeposit ? 'Request a deposit' : 'Request a withdrawal'}</h2>
+          <p class="label">${isDeposit
+            ? 'Enter the amount you are sending. Your balance updates once the deposit is confirmed.'
+            : `Available balance: $${formatCurrency(data.portfolioValue)}. Your balance updates once the withdrawal is approved.`}</p>
+          ${message ? `<p class="error">${escapeHtml(message)}</p>` : ''}
+          <label>Amount (USD)<input id="reqAmount" type="number" inputmode="decimal" min="0" step="0.01" /></label>
+          <label>Note (optional)<input id="reqNote" maxlength="200" placeholder="${isDeposit ? 'e.g. transfer reference' : 'e.g. payout details'}" /></label>
+          <button id="reqSubmit" style="width:100%">Submit request</button>
+          <button class="secondary" id="reqCancel" style="width:100%;margin-top:12px">Cancel</button>
+        </div>`;
+
+      document.getElementById('reqCancel').addEventListener('click', () => loadDashboard());
+      document.getElementById('reqSubmit').addEventListener('click', async (e) => {
+        const btn = e.target;
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+        try {
+          const res = await fetch(`${API_BASE}/api/requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({
+              type,
+              amount: document.getElementById('reqAmount').value,
+              note: document.getElementById('reqNote').value,
+            }),
+          });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.message || 'Request failed.');
+          flash = body.message;
+          loadDashboard();
+        } catch (err) {
+          renderRequestForm(type, data, err.message);
+        }
+      });
     }
 
     async function loadDashboard() {
