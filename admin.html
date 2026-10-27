@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin</title>
+  <style>
+    :root { --bg:#0f1419; --surface:#171e26; --border:#263140; --text:#e8edf2; --muted:#8b98a8; --accent:#3b82f6; --green:#34d399; --red:#f87171; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; line-height:1.5; }
+    .container { max-width:800px; margin:0 auto; padding:24px 16px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; }
+    .label { color:var(--muted); font-size:14px; }
+    .row { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .stat { font-size:22px; font-weight:700; }
+    button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:15px; cursor:pointer; }
+    button.secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
+    input, select { width:100%; padding:12px; margin:6px 0 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:16px; }
+    .error { color:var(--red); } .ok { color:var(--green); }
+  </style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<script>
+  const API_BASE = 'https://investor-api-1.onrender.com';
+  const app = document.getElementById('app');
+  const money = (v) => Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  async function api(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('adminToken')}`, ...(options.headers || {}) },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Request failed.');
+    return data;
+  }
+
+  function renderLogin(msg = '') {
+    app.innerHTML = `
+      <div class="card" style="max-width:400px;margin:10vh auto 0">
+        <h2>Admin login</h2>
+        ${msg ? `<p class="error">${esc(msg)}</p>` : ''}
+        <input id="email" type="email" placeholder="Email" />
+        <input id="password" type="password" placeholder="Password" />
+        <button id="go" style="width:100%">Log in</button>
+      </div>`;
+    document.getElementById('go').onclick = async () => {
+      try {
+        const data = await fetch(API_BASE + '/api/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.value.trim(), password: password.value }),
+        }).then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.message); return d; });
+        if (data.role !== 'admin') throw new Error('Not an admin account.');
+        localStorage.setItem('adminToken', data.token);
+        load();
+      } catch (e) { renderLogin(e.message); }
+    };
+  }
+
+  async function load(flash = '') {
+    try {
+      const { investors } = await api('/api/admin/investors');
+      app.innerHTML = `
+        <div class="row" style="align-items:center;margin-bottom:16px">
+          <h1 style="margin:0">Investors</h1>
+          <button class="secondary" id="out">Log out</button>
+        </div>
+        ${flash ? `<p class="ok">${esc(flash)}</p>` : ''}
+        ${investors.map((u) => `
+          <div class="card">
+            <div class="row"><strong>${esc(u.email)}</strong><span class="label">${esc(u.status)}</span></div>
+            <div class="stat">$${money(u.portfolioValue)}</div>
+            <div class="label">Deposited $${money(u.totalDeposited)} · Withdrawn $${money(u.totalWithdrawn)} · Profit $${money(u.totalProfit)}</div>
+            <hr style="border:0;border-top:1px solid var(--border);margin:14px 0">
+            <select id="type-${u.id}">
+              <option value="deposit">Deposit</option>
+              <option value="withdrawal">Withdrawal</option>
+              <option value="profit">Profit</option>
+              <option value="loss">Loss</option>
+            </select>
+            <input id="amt-${u.id}" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Amount" />
+            <input id="note-${u.id}" placeholder="Note (required, e.g. bank transfer ref)" />
+            <button data-record="${u.id}">Record entry</button>
+            <select id="status-${u.id}" style="margin-top:14px">
+              ${['active','frozen','pending_verification'].map((s) => `<option value="${s}" ${s === u.status ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+            <button class="secondary" data-status="${u.id}">Update status</button>
+          </div>`).join('')}`;
+
+      document.getElementById('out').onclick = () => { localStorage.removeItem('adminToken'); renderLogin(); };
+      app.querySelectorAll('[data-record]').forEach((b) => b.onclick = async () => {
+        const id = b.dataset.record;
+        try {
+          await api('/api/admin/transaction', { method: 'POST', body: JSON.stringify({
+            userId: id, type: document.getElementById('type-' + id).value,
+            amount: document.getElementById('amt-' + id).value, note: document.getElementById('note-' + id).value,
+          }) });
+          load('Entry recorded.');
+        } catch (e) { alert(e.message); }
+      });
+      app.querySelectorAll('[data-status]').forEach((b) => b.onclick = async () => {
+        const id = b.dataset.status;
+        try {
+          await api('/api/admin/status', { method: 'POST', body: JSON.stringify({ userId: id, status: document.getElementById('status-' + id).value }) });
+          load('Status updated.');
+        } catch (e) { alert(e.message); }
+      });
+    } catch (e) { renderLogin(e.message); }
+  }
+
+  localStorage.getItem('adminToken') ? load() : renderLogin();
+</script>
+</body>
+</html>

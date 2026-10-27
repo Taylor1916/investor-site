@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Investor Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #171e26;
+      --border: #263140;
+      --text: #e8edf2;
+      --muted: #8b98a8;
+      --accent: #3b82f6;
+      --green: #34d399;
+      --red: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 32px 20px; }
+    h1, h2, h3 { margin: 0; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .metrics { display: flex; gap: 16px; margin: 24px 0; flex-wrap: wrap; }
+    .metrics .card { flex: 1; min-width: 220px; }
+    .label { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+    .value { font-size: 28px; font-weight: 700; }
+    .profit { color: var(--green); }
+    .asset {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .asset:last-child { border-bottom: none; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 6px 0 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 16px;
+    }
+    .login { max-width: 400px; margin: 12vh auto 0; }
+    .error { color: var(--red); margin: 0 0 16px; }
+    .header { display: flex; justify-content: space-between; align-items: center; }
+    .center { text-align: center; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container" id="app"></div>
+
+  <script>
+    const API_BASE = 'https://investor-api-1.onrender.com';
+
+    const app = document.getElementById('app');
+    const getToken = () => localStorage.getItem('token');
+
+    const formatCurrency = (value) =>
+      Number(value ?? 0).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+    const escapeHtml = (str) =>
+      String(str).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+
+    function renderLogin(message = '') {
+      app.innerHTML = `
+        <div class="card login">
+          <h2>Sign in</h2>
+          <p class="label">Access your investor dashboard</p>
+          ${message ? `<p class="error">${escapeHtml(message)}</p>` : ''}
+          <label>Email<input id="email" type="email" autocomplete="username" /></label>
+          <label>Password<input id="password" type="password" autocomplete="current-password" /></label>
+          <button id="loginBtn" style="width:100%">Log in</button>
+        </div>`;
+
+      const btn = document.getElementById('loginBtn');
+      const submit = async () => {
+        btn.disabled = true;
+        btn.textContent = 'Signing in...';
+        try {
+          const res = await fetch(`${API_BASE}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: document.getElementById('email').value.trim(),
+              password: document.getElementById('password').value,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || 'Login failed.');
+          localStorage.setItem('token', data.token);
+          loadDashboard();
+        } catch (err) {
+          renderLogin(err.message);
+        }
+      };
+      btn.addEventListener('click', submit);
+      document.getElementById('password').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submit();
+      });
+    }
+
+    function renderMessage(title, text, { logout = false } = {}) {
+      app.innerHTML = `
+        <div class="card center" style="margin-top:12vh">
+          <h2 class="error">${escapeHtml(title)}</h2>
+          <p>${escapeHtml(text)}</p>
+          ${logout ? '<button id="backBtn">Back to login</button>' : ''}
+        </div>`;
+      if (logout) {
+        document.getElementById('backBtn').addEventListener('click', () => {
+          localStorage.removeItem('token');
+          renderLogin();
+        });
+      }
+    }
+
+    function renderDashboard(data) {
+      const assets = Array.isArray(data.allowedAssets) ? data.allowedAssets : [];
+
+      app.innerHTML = `
+        <div class="header">
+          <h1>Investor Dashboard</h1>
+          <button class="secondary" id="logoutBtn">Log out</button>
+        </div>
+
+        <div class="metrics">
+          <div class="card">
+            <div class="label">Total Balance</div>
+            <div class="value">$${formatCurrency(data.portfolioValue)}</div>
+          </div>
+          <div class="card">
+            <div class="label">Total Earnings</div>
+            <div class="value profit">+$${formatCurrency(data.totalProfit)}</div>
+          </div>
+        </div>
+
+        <h3 style="margin-bottom:12px">Transaction History</h3>
+        <div class="card" style="margin-bottom:24px">
+          ${
+            (data.transactions || []).length === 0
+              ? '<p class="label">No transactions yet.</p>'
+              : data.transactions.map((t) => `
+                  <div class="asset">
+                    <div>
+                      <strong style="text-transform:capitalize">${escapeHtml(t.type)}</strong>
+                      <div class="label" style="margin:0">${new Date(t.date).toLocaleDateString()} · ${escapeHtml(t.note)}</div>
+                    </div>
+                    <strong class="${t.type === 'deposit' || t.type === 'profit' ? 'profit' : ''}">
+                      ${t.type === 'deposit' || t.type === 'profit' ? '+' : '-'}$${formatCurrency(t.amount)}
+                    </strong>
+                  </div>`).join('')
+          }
+        </div>
+
+        <h3 style="margin-bottom:12px">Available Investment Markets</h3>
+        <div class="card">
+          ${
+            assets.length === 0
+              ? '<p class="label">No active assets currently available for investment.</p>'
+              : assets.map((a) => `
+                  <div class="asset">
+                    <strong>${escapeHtml(a)}</strong>
+                    <button data-asset="${escapeHtml(a)}">Place Investment</button>
+                  </div>`).join('')
+          }
+        </div>`;
+
+      document.getElementById('logoutBtn').addEventListener('click', () => {
+        localStorage.removeItem('token');
+        renderLogin();
+      });
+      app.querySelectorAll('[data-asset]').forEach((btn) =>
+        btn.addEventListener('click', () =>
+          alert(`Order placed for ${btn.dataset.asset}`)
+        )
+      );
+    }
+
+    async function loadDashboard() {
+      const token = getToken();
+      if (!token) return renderLogin();
+
+      app.innerHTML = '<p class="center label" style="margin-top:20vh">Loading portfolio...</p>';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/dashboard`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('token');
+            return renderLogin(data.message || 'Session expired. Please log in again.');
+          }
+          throw new Error(data.message || 'Failed to load dashboard data.');
+        }
+
+        if (data.status === 'frozen') {
+          return renderMessage(
+            'Account Suspended',
+            'Your trading access is currently locked. Please contact support to restore access.',
+            { logout: true }
+          );
+        }
+
+        renderDashboard(data);
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
+        renderMessage('Connection Error', err.message, { logout: true });
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
