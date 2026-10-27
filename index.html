@@ -92,23 +92,34 @@
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
       }[c]));
 
-    function renderLogin(message = '') {
+    function renderLogin(message = '', mode = 'login') {
+      const isSignup = mode === 'signup';
       app.innerHTML = `
         <div class="card login">
-          <h2>Sign in</h2>
-          <p class="label">Access your investor dashboard</p>
+          <h2>${isSignup ? 'Create account' : 'Sign in'}</h2>
+          <p class="label">${isSignup ? 'Sign up with your email address' : 'Access your investor dashboard'}</p>
           ${message ? `<p class="error">${escapeHtml(message)}</p>` : ''}
           <label>Email<input id="email" type="email" autocomplete="username" /></label>
-          <label>Password<input id="password" type="password" autocomplete="current-password" /></label>
-          <button id="loginBtn" style="width:100%">Log in</button>
+          <label>Password<input id="password" type="password" autocomplete="${isSignup ? 'new-password' : 'current-password'}" /></label>
+          ${isSignup ? '<p class="label" style="margin-top:-8px">At least 8 characters.</p>' : ''}
+          <button id="loginBtn" style="width:100%">${isSignup ? 'Sign up' : 'Log in'}</button>
+          <p class="center label" style="margin:16px 0 0">
+            ${isSignup ? 'Already have an account?' : 'New here?'}
+            <a href="#" id="switchMode" style="color:var(--accent)">${isSignup ? 'Log in' : 'Create an account'}</a>
+          </p>
         </div>`;
+
+      document.getElementById('switchMode').addEventListener('click', (e) => {
+        e.preventDefault();
+        renderLogin('', isSignup ? 'login' : 'signup');
+      });
 
       const btn = document.getElementById('loginBtn');
       const submit = async () => {
         btn.disabled = true;
-        btn.textContent = 'Signing in...';
+        btn.textContent = isSignup ? 'Creating account...' : 'Signing in...';
         try {
-          const res = await fetch(`${API_BASE}/api/login`, {
+          const res = await fetch(`${API_BASE}/api/${isSignup ? 'signup' : 'login'}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -117,11 +128,11 @@
             }),
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.message || 'Login failed.');
+          if (!res.ok) throw new Error(data.message || 'Request failed.');
           localStorage.setItem('token', data.token);
           loadDashboard();
         } catch (err) {
-          renderLogin(err.message);
+          renderLogin(err.message, mode);
         }
       };
       btn.addEventListener('click', submit);
@@ -225,6 +236,14 @@
             return renderLogin(data.message || 'Session expired. Please log in again.');
           }
           throw new Error(data.message || 'Failed to load dashboard data.');
+        }
+
+        if (data.status === 'pending_verification') {
+          return renderMessage(
+            'Account Pending',
+            'Your account was created and is waiting for approval. Please check back soon.',
+            { logout: true }
+          );
         }
 
         if (data.status === 'frozen') {
