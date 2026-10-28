@@ -1,139 +1,669 @@
+<DOCTYPE html>
 
-const DEPOSIT_ADDRESS = '0x32991C13b625219ec2B05b60242289c89406454E';
+<html lang="en">
 
-function renderDepositForm(data, message = '') {
-  app.innerHTML = `
-    <div class="card login">
-      <h2>Deposit Funds</h2>
-      <p class="label">
-        Select a token and send it using the BNB Smart Chain network.
-      </p>
+<head>
 
-      ${message ? `<p class="error">${escapeHtml(message)}</p>` : ''}
+  <meta charset="UTF-8" />
 
-      <label for="depositCoin">Cryptocurrency</label>
-      <select id="depositCoin" style="
-        width:100%;padding:12px;margin:6px 0 16px;
-        background:var(--bg);border:1px solid var(--border);
-        border-radius:8px;color:var(--text);font-size:16px;">
-        <option value="USDC">USDC — BEP20</option>
-        <option value="USDT">USDT — BEP20</option>
-      </select>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-      <div class="label">Network</div>
-      <p><strong>BNB Smart Chain (BEP20)</strong></p>
+  <title>Investor Dashboard</title>
 
-      <div class="label">Wallet address</div>
-      <div id="depositAddress" style="
-        overflow-wrap:anywhere;background:var(--bg);
-        border:1px solid var(--border);padding:12px;
-        border-radius:8px;margin-bottom:12px;">
-        ${DEPOSIT_ADDRESS}
-      </div>
+  <style>
 
-      <button id="copyDepositAddress" type="button"
-        style="width:100%;margin-bottom:20px;">
-        Copy wallet address
-      </button>
+    :root {
 
-      <div style="
-        background:#332a18;color:#fcd68a;padding:12px;
-        border-radius:8px;font-size:13px;margin-bottom:20px;">
-        Important: Send only the selected token on BNB Smart Chain.
-        Check the network before transferring. Sending on the wrong
-        network may result in loss of funds.
-      </div>
+      --bg: #0f1419;
 
-      <label for="depositAmount">Amount (USD)</label>
-      <input id="depositAmount" type="number" min="0.01"
-        step="0.01" inputmode="decimal" placeholder="e.g. 50" />
+      --surface: #171e26;
 
-      <label for="depositTxHash">Transaction hash (if available)</label>
-      <input id="depositTxHash" type="text"
-        placeholder="Paste your transaction hash" />
+      --border: #263140;
 
-      <button id="submitDeposit" style="width:100%">
-        Submit deposit request
-      </button>
+      --text: #e8edf2;
 
-      <button class="secondary" id="cancelDeposit"
-        style="width:100%;margin-top:12px">
-        Back to dashboard
-      </button>
+      --muted: #8b98a8;
 
-      <p class="label" style="margin-top:16px">
-        Your deposit request is pending review until the payment is verified.
-      </p>
-    </div>
-  `;
+      --accent: #3b82f6;
 
-  document.getElementById('cancelDeposit').addEventListener(
-    'click', () => loadDashboard()
-  );
+      --green: #34d399;
 
-  document.getElementById('copyDepositAddress').addEventListener(
-    'click', async () => {
-      try {
-        await navigator.clipboard.writeText(DEPOSIT_ADDRESS);
-        document.getElementById('copyDepositAddress').textContent =
-          'Address copied!';
-      } catch {
-        renderDepositForm(data, 'Copy failed. Please copy the address manually.');
-      }
+      --red: #f87171;
+
     }
-  );
 
-  document.getElementById('submitDeposit').addEventListener(
-    'click', async (e) => {
-      const btn = e.currentTarget;
-      const amount = Number(
-        document.getElementById('depositAmount').value
-      );
-      const coin = document.getElementById('depositCoin').value;
-      const txHash = document.getElementById('depositTxHash').value.trim();
+    * { box-sizing: border-box; }
 
-      if (!Number.isFinite(amount) || amount <= 0) {
-        return renderDepositForm(data, 'Enter a valid deposit amount.');
+    body {
+
+      margin: 0;
+
+      background: var(--bg);
+
+      color: var(--text);
+
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+      line-height: 1.5;
+
+    }
+
+    .container { max-width: 800px; margin: 0 auto; padding: 32px 20px; }
+
+    h1, h2, h3 { margin: 0; }
+
+    .card {
+
+      background: var(--surface);
+
+      border: 1px solid var(--border);
+
+      border-radius: 12px;
+
+      padding: 20px;
+
+    }
+
+    .metrics { display: flex; gap: 16px; margin: 24px 0; flex-wrap: wrap; }
+
+    .metrics .card { flex: 1; min-width: 220px; }
+
+    .label { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+
+    .value { font-size: 28px; font-weight: 700; }
+
+    .profit { color: var(--green); }
+
+    .asset {
+
+      display: flex;
+
+      justify-content: space-between;
+
+      align-items: center;
+
+      padding: 14px 0;
+
+      border-bottom: 1px solid var(--border);
+
+    }
+
+    .asset:last-child { border-bottom: none; }
+
+    button {
+
+      background: var(--accent);
+
+      color: #fff;
+
+      border: 0;
+
+      border-radius: 8px;
+
+      padding: 10px 16px;
+
+      font-size: 15px;
+
+      cursor: pointer;
+
+    }
+
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    input {
+
+      width: 100%;
+
+      padding: 12px;
+
+      margin: 6px 0 16px;
+
+      background: var(--bg);
+
+      border: 1px solid var(--border);
+
+      border-radius: 8px;
+
+      color: var(--text);
+
+      font-size: 16px;
+
+    }
+
+    .login { max-width: 400px; margin: 12vh auto 0; }
+
+    .error { color: var(--red); margin: 0 0 16px; }
+
+    .header { display: flex; justify-content: space-between; align-items: center; }
+
+    .actions { display: flex; gap: 12px; margin: 0 0 24px; }
+
+    .actions button { flex: 1; }
+
+    .center { text-align: center; }
+
+    .hidden { display: none; }
+
+  </style>
+
+</head>
+
+<body>
+
+  <div class="container" id="app"></div>
+
+  <script>
+
+    const API_BASE = 'https://investor-api-1.onrender.com';
+
+    const app = document.getElementById('app');
+
+    const getToken = () => localStorage.getItem('token');
+
+    let flash = '';
+
+    const formatCurrency = (value) =>
+
+      Number(value ?? 0).toLocaleString(undefined, {
+
+        minimumFractionDigits: 2,
+
+        maximumFractionDigits: 2,
+
+      });
+
+    const escapeHtml = (str) =>
+
+      String(str).replace(/[&<>"']/g, (c) => ({
+
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+
+      }[c]));
+
+    let priceTimer = null;
+
+    const COINS = [
+
+      { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin' },
+
+      { id: 'ethereum', symbol: 'ETH', name: 'Ethereum' },
+
+      { id: 'solana', symbol: 'SOL', name: 'Solana' },
+
+    ];
+
+    async function refreshPrices() {
+
+      const box = document.getElementById('prices');
+
+      if (!box) {
+
+        clearInterval(priceTimer);
+
+        priceTimer = null;
+
+        return;
+
       }
-
-      if (txHash && !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
-        return renderDepositForm(data, 'Enter a valid transaction hash.');
-      }
-
-      btn.disabled = true;
-      btn.textContent = 'Submitting...';
 
       try {
-        const res = await fetch(`${API_BASE}/api/requests`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${getToken()}`
-          },
-          body: JSON.stringify({
-            type: 'deposit',
-            amount,
-            note: [
-              `Token: ${coin}`,
-              'Network: BNB Smart Chain (BEP20)',
-              `Wallet: ${DEPOSIT_ADDRESS}`,
-              `Transaction hash: ${txHash || 'Not provided'}`
-            ].join(' | ')
-          })
-        });
 
-        const body = await res.json();
+        const url = 'https://api.coingecko.com/api/v3/simple/price?ids='
 
-        if (!res.ok) {
-          throw new Error(body.message || 'Deposit request failed.');
+          + COINS.map((c) => c.id).join(',')
+
+          + '&vs_currencies=usd&include_24hr_change=true';
+
+        const res = await fetch(url);
+
+        if (!res.ok) throw new Error('Price feed unavailable.');
+
+        const data = await res.json();
+
+        box.innerHTML = COINS.map((c) => {
+
+          const p = data[c.id];
+
+          if (!p) return '';
+
+          const change = Number(p.usd_24h_change || 0);
+
+          const up = change >= 0;
+
+          return `
+
+            <div class="asset">
+
+              <div>
+
+                <strong>${c.symbol}</strong>
+
+                <div class="label" style="margin:0">${c.name}</div>
+
+              </div>
+
+              <div style="text-align:right">
+
+                <strong>$${formatCurrency(p.usd)}</strong>
+
+                <div class="${up ? 'profit' : 'error'}" style="margin:0;font-size:14px">${up ? '+' : ''}${change.toFixed(2)}% (24h)</div>
+
+              </div>
+
+            </div>`;
+
+        }).join('') + `<p class="label" style="margin:12px 0 0">Updated ${new Date().toLocaleTimeString()}</p>`;
+
+      } catch (err) {
+
+        box.innerHTML = '<p class="label">Market prices are unavailable right now.</p>';
+
+      }
+
+    }
+
+    function renderLogin(message = '', mode = 'login') {
+
+      const isSignup = mode === 'signup';
+
+      app.innerHTML = `
+
+        <div class="card login">
+
+          <h2>${isSignup ? 'Create account' : 'Sign in'}</h2>
+
+          <p class="label">${isSignup ? 'Sign up with your email address' : 'Access your investor dashboard'}</p>
+
+          ${message ? `<p class="error">${escapeHtml(message)}</p>` : ''}
+
+          <label>Email<input id="email" type="email" autocomplete="username" /></label>
+
+          <label>Password<input id="password" type="password" autocomplete="${isSignup ? 'new-password' : 'current-password'}" /></label>
+
+          ${isSignup ? '<p class="label" style="margin-top:-8px">At least 8 characters.</p>' : ''}
+
+          <button id="loginBtn" style="width:100%">${isSignup ? 'Sign up' : 'Log in'}</button>
+
+          <p class="center label" style="margin:16px 0 0">
+
+            ${isSignup ? 'Already have an account?' : 'New here?'}
+
+            <a href="#" id="switchMode" style="color:var(--accent)">${isSignup ? 'Log in' : 'Create an account'}</a>
+
+          </p>
+
+        </div>`;
+
+      document.getElementById('switchMode').addEventListener('click', (e) => {
+
+        e.preventDefault();
+
+        renderLogin('', isSignup ? 'login' : 'signup');
+
+      });
+
+      const btn = document.getElementById('loginBtn');
+
+      const submit = async () => {
+
+        btn.disabled = true;
+
+        btn.textContent = isSignup ? 'Creating account...' : 'Signing in...';
+
+        try {
+
+          const res = await fetch(`${API_BASE}/api/${isSignup ? 'signup' : 'login'}`, {
+
+            method: 'POST',
+
+            headers: { 'Content-Type': 'application/json' },
+
+            body: JSON.stringify({
+
+              email: document.getElementById('email').value.trim(),
+
+              password: document.getElementById('password').value,
+
+            }),
+
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) throw new Error(data.message || 'Request failed.');
+
+          localStorage.setItem('token', data.token);
+
+          loadDashboard();
+
+        } catch (err) {
+
+          renderLogin(err.message, mode);
+
         }
 
-        flash = body.message ||
-          'Deposit request submitted for verification.';
-        loadDashboard();
-      } catch (err) {
-        renderDepositForm(data, err.message);
-      }
+      };
+
+      btn.addEventListener('click', submit);
+
+      document.getElementById('password').addEventListener('keydown', (e) => {
+
+        if (e.key === 'Enter') submit();
+
+      });
+
     }
-  );
-}
+
+    function renderMessage(title, text, { logout = false } = {}) {
+
+      app.innerHTML = `
+
+        <div class="card center" style="margin-top:12vh">
+
+          <h2 class="error">${escapeHtml(title)}</h2>
+
+          <p>${escapeHtml(text)}</p>
+
+          ${logout ? '<button id="backBtn">Back to login</button>' : ''}
+
+        </div>`;
+
+      if (logout) {
+
+        document.getElementById('backBtn').addEventListener('click', () => {
+
+          localStorage.removeItem('token');
+
+          renderLogin();
+
+        });
+
+      }
+
+    }
+
+    function renderDashboard(data) {
+
+      app.innerHTML = `
+
+        <div class="header">
+
+          <h1>Investor Dashboard</h1>
+
+          <button class="secondary" id="logoutBtn">Log out</button>
+
+        </div>
+
+        <div class="metrics">
+
+          <div class="card">
+
+            <div class="label">Total Balance</div>
+
+            <div class="value">$${formatCurrency(data.portfolioValue)}</div>
+
+          </div>
+
+          <div class="card">
+
+            <div class="label">Total Earnings</div>
+
+            <div class="value profit">+$${formatCurrency(data.totalProfit)}</div>
+
+          </div>
+
+        </div>
+
+        ${flash ? `<p class="profit" style="margin:0 0 16px">${escapeHtml(flash)}</p>` : ''}
+
+        <div class="actions">
+
+          <button id="depositBtn">Deposit</button>
+
+          <button class="secondary" id="withdrawBtn">Withdraw</button>
+
+        </div>
+
+        ${(data.requests || []).length === 0 ? '' : `
+
+          <h3 style="margin-bottom:12px">Your Requests</h3>
+
+          <div class="card" style="margin-bottom:24px">
+
+            ${data.requests.map((r) => `
+
+              <div class="asset">
+
+                <div>
+
+                  <strong style="text-transform:capitalize">${escapeHtml(r.type)}</strong>
+
+                  <div class="label" style="margin:0">${new Date(r.date).toLocaleDateString()} · ${escapeHtml(r.status)}</div>
+
+                </div>
+
+                <strong>$${formatCurrency(r.amount)}</strong>
+
+              </div>`).join('')}
+
+          </div>`}
+
+        <h3 style="margin-bottom:12px">Transaction History</h3>
+
+        <div class="card" style="margin-bottom:24px">
+
+          ${
+
+            (data.transactions || []).length === 0
+
+              ? '<p class="label">No transactions yet.</p>'
+
+              : data.transactions.map((t) => `
+
+                  <div class="asset">
+
+                    <div>
+
+                      <strong style="text-transform:capitalize">${escapeHtml(t.type)}</strong>
+
+                      <div class="label" style="margin:0">${new Date(t.date).toLocaleDateString()} · ${escapeHtml(t.note)}</div>
+
+                    </div>
+
+                    <strong class="${t.type === 'deposit' || t.type === 'profit' ? 'profit' : ''}">
+
+                      ${t.type === 'deposit' || t.type === 'profit' ? '+' : '-'}$${formatCurrency(t.amount)}
+
+                    </strong>
+
+                  </div>`).join('')
+
+          }
+
+        </div>
+
+        <h3 style="margin-bottom:4px">Market Prices</h3>
+
+        <p class="label" style="margin:0 0 12px">Live market data for information only. This does not show trades made with your account.</p>
+
+        <div class="card" id="prices"><p class="label">Loading prices...</p></div>`;
+
+      document.getElementById('logoutBtn').addEventListener('click', () => {
+
+        localStorage.removeItem('token');
+
+        renderLogin();
+
+      });
+
+      flash = '';
+
+      document.getElementById('depositBtn').addEventListener('click', () => renderRequestForm('deposit', data));
+
+      document.getElementById('withdrawBtn').addEventListener('click', () => renderRequestForm('withdrawal', data));
+
+      refreshPrices();
+
+      clearInterval(priceTimer);
+
+      priceTimer = setInterval(refreshPrices, 60000);
+
+    }
+
+    function renderRequestForm(type, data, message = '') {
+
+      const isDeposit = type === 'deposit';
+
+      app.innerHTML = `
+
+        <div class="card login">
+
+          <h2>${isDeposit ? 'Request a deposit' : 'Request a withdrawal'}</h2>
+
+          <p class="label">${isDeposit
+
+            ? 'Enter the amount you are sending. Your balance updates once the deposit is confirmed.'
+
+            : `Available balance: $${formatCurrency(data.portfolioValue)}. Your balance updates once the withdrawal is approved.`}</p>
+
+          ${message ? `<p class="error">${escapeHtml(message)}</p>` : ''}
+
+          <label>Amount (USD)<input id="reqAmount" type="number" inputmode="decimal" min="0" step="0.01" /></label>
+
+          <label>Note (optional)<input id="reqNote" maxlength="200" placeholder="${isDeposit ? 'e.g. transfer reference' : 'e.g. payout details'}" /></label>
+
+          <button id="reqSubmit" style="width:100%">Submit request</button>
+
+          <button class="secondary" id="reqCancel" style="width:100%;margin-top:12px">Cancel</button>
+
+        </div>`;
+
+      document.getElementById('reqCancel').addEventListener('click', () => loadDashboard());
+
+      document.getElementById('reqSubmit').addEventListener('click', async (e) => {
+
+        const btn = e.target;
+
+        btn.disabled = true;
+
+        btn.textContent = 'Submitting...';
+
+        try {
+
+          const res = await fetch(`${API_BASE}/api/requests`, {
+
+            method: 'POST',
+
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+
+            body: JSON.stringify({
+
+              type,
+
+              amount: document.getElementById('reqAmount').value,
+
+              note: document.getElementById('reqNote').value,
+
+            }),
+
+          });
+
+          const body = await res.json();
+
+          if (!res.ok) throw new Error(body.message || 'Request failed.');
+
+          flash = body.message;
+
+          loadDashboard();
+
+        } catch (err) {
+
+          renderRequestForm(type, data, err.message);
+
+        }
+
+      });
+
+    }
+
+    async function loadDashboard() {
+
+      const token = getToken();
+
+      if (!token) return renderLogin();
+
+      app.innerHTML = '<p class="center label" style="margin-top:20vh">Loading portfolio...</p>';
+
+      try {
+
+        const res = await fetch(`${API_BASE}/api/dashboard`, {
+
+          headers: { Authorization: `Bearer ${token}` },
+
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+
+          if (res.status === 401 || res.status === 403) {
+
+            localStorage.removeItem('token');
+
+            return renderLogin(data.message || 'Session expired. Please log in again.');
+
+          }
+
+          throw new Error(data.message || 'Failed to load dashboard data.');
+
+        }
+
+        if (data.status === 'pending_verification') {
+
+          return renderMessage(
+
+            'Account Pending',
+
+            'Your account was created and is waiting for approval. Please check back soon.',
+
+            { logout: true }
+
+          );
+
+        }
+
+        if (data.status === 'frozen') {
+
+          return renderMessage(
+
+            'Account Suspended',
+
+            'Your account is currently locked. Please contact support to restore access.',
+
+            { logout: true }
+
+          );
+
+        }
+
+        renderDashboard(data);
+
+      } catch (err) {
+
+        console.error('Dashboard fetch error:', err);
+
+        renderMessage('Connection Error', err.message, { logout: true });
+
+      }
+
+    }
+
+    loadDashboard();
+
+  </script>
+
+</body>
+
+</html>
