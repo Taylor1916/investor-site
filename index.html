@@ -95,6 +95,49 @@
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
       }[c]));
 
+    let priceTimer = null;
+    const COINS = [
+      { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin' },
+      { id: 'ethereum', symbol: 'ETH', name: 'Ethereum' },
+      { id: 'solana', symbol: 'SOL', name: 'Solana' },
+    ];
+
+    async function refreshPrices() {
+      const box = document.getElementById('prices');
+      if (!box) {
+        clearInterval(priceTimer);
+        priceTimer = null;
+        return;
+      }
+      try {
+        const url = 'https://api.coingecko.com/api/v3/simple/price?ids='
+          + COINS.map((c) => c.id).join(',')
+          + '&vs_currencies=usd&include_24hr_change=true';
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Price feed unavailable.');
+        const data = await res.json();
+        box.innerHTML = COINS.map((c) => {
+          const p = data[c.id];
+          if (!p) return '';
+          const change = Number(p.usd_24h_change || 0);
+          const up = change >= 0;
+          return `
+            <div class="asset">
+              <div>
+                <strong>${c.symbol}</strong>
+                <div class="label" style="margin:0">${c.name}</div>
+              </div>
+              <div style="text-align:right">
+                <strong>$${formatCurrency(p.usd)}</strong>
+                <div class="${up ? 'profit' : 'error'}" style="margin:0;font-size:14px">${up ? '+' : ''}${change.toFixed(2)}% (24h)</div>
+              </div>
+            </div>`;
+        }).join('') + `<p class="label" style="margin:12px 0 0">Updated ${new Date().toLocaleTimeString()}</p>`;
+      } catch (err) {
+        box.innerHTML = '<p class="label">Market prices are unavailable right now.</p>';
+      }
+    }
+
     function renderLogin(message = '', mode = 'login') {
       const isSignup = mode === 'signup';
       app.innerHTML = `
@@ -160,8 +203,6 @@
     }
 
     function renderDashboard(data) {
-      const assets = Array.isArray(data.allowedAssets) ? data.allowedAssets : [];
-
       app.innerHTML = `
         <div class="header">
           <h1>Investor Dashboard</h1>
@@ -216,18 +257,9 @@
           }
         </div>
 
-        <h3 style="margin-bottom:12px">Available Investment Markets</h3>
-        <div class="card">
-          ${
-            assets.length === 0
-              ? '<p class="label">No active assets currently available for investment.</p>'
-              : assets.map((a) => `
-                  <div class="asset">
-                    <strong>${escapeHtml(a)}</strong>
-                    <button data-asset="${escapeHtml(a)}">Place Investment</button>
-                  </div>`).join('')
-          }
-        </div>`;
+        <h3 style="margin-bottom:4px">Market Prices</h3>
+        <p class="label" style="margin:0 0 12px">Live market data for information only. This does not show trades made with your account.</p>
+        <div class="card" id="prices"><p class="label">Loading prices...</p></div>`;
 
       document.getElementById('logoutBtn').addEventListener('click', () => {
         localStorage.removeItem('token');
@@ -236,11 +268,9 @@
       flash = '';
       document.getElementById('depositBtn').addEventListener('click', () => renderRequestForm('deposit', data));
       document.getElementById('withdrawBtn').addEventListener('click', () => renderRequestForm('withdrawal', data));
-      app.querySelectorAll('[data-asset]').forEach((btn) =>
-        btn.addEventListener('click', () =>
-          alert(`Order placed for ${btn.dataset.asset}`)
-        )
-      );
+      refreshPrices();
+      clearInterval(priceTimer);
+      priceTimer = setInterval(refreshPrices, 60000);
     }
 
     function renderRequestForm(type, data, message = '') {
@@ -314,7 +344,7 @@
         if (data.status === 'frozen') {
           return renderMessage(
             'Account Suspended',
-            'Your trading access is currently locked. Please contact support to restore access.',
+            'Your account is currently locked. Please contact support to restore access.',
             { logout: true }
           );
         }
