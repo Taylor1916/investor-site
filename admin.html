@@ -62,12 +62,23 @@
   async function load(flash = '') {
     try {
       const { investors } = await api('/api/admin/investors');
+      const { requests } = await api('/api/admin/requests');
       app.innerHTML = `
         <div class="row" style="align-items:center;margin-bottom:16px">
           <h1 style="margin:0">Investors</h1>
           <button class="secondary" id="out">Log out</button>
         </div>
         ${flash ? `<p class="ok">${esc(flash)}</p>` : ''}
+        ${requests.length ? `<h2 style="margin:0 0 12px">Pending requests</h2>${requests.map((r) => `
+          <div class="card">
+            <div class="row"><strong>${esc(r.email)}</strong><span class="label">${new Date(r.date).toLocaleDateString()}</span></div>
+            <div class="stat" style="text-transform:capitalize">${esc(r.type)}: $${money(r.amount)}</div>
+            ${r.note ? `<div class="label">${esc(r.note)}</div>` : ''}
+            <div class="row" style="margin-top:12px">
+              <button data-approve="${r.id}">Approve</button>
+              <button class="secondary" data-decline="${r.id}">Decline</button>
+            </div>
+          </div>`).join('')}<h2 style="margin:24px 0 12px">Investors</h2>` : ''}
         ${investors.map((u) => `
           <div class="card">
             <div class="row"><strong>${esc(u.email)}</strong><span class="label">${esc(u.status)}</span></div>
@@ -90,6 +101,16 @@
           </div>`).join('')}`;
 
       document.getElementById('out').onclick = () => { localStorage.removeItem('adminToken'); renderLogin(); };
+      const decide = async (id, decision) => {
+        try {
+          const d = await api(`/api/admin/requests/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision }) });
+          load(d.message);
+        } catch (e) { alert(e.message); }
+      };
+      app.querySelectorAll('[data-approve]').forEach((b) => b.onclick = () => {
+        if (confirm('Approve and record this entry?')) decide(b.dataset.approve, 'approve');
+      });
+      app.querySelectorAll('[data-decline]').forEach((b) => b.onclick = () => decide(b.dataset.decline, 'decline'));
       app.querySelectorAll('[data-record]').forEach((b) => b.onclick = async () => {
         const id = b.dataset.record;
         try {
